@@ -230,7 +230,21 @@ func (c *cronWorker) stopAllJob() {
 func (c *cronWorker) registerNextInterval(j *Job) {
 	if j.schedule != nil {
 		j.ticker.Stop()
-		j.ticker = time.NewTicker(j.schedule.NextInterval(time.Now()))
+		// Calculate the next execution time based on the cron schedule
+		nextTime := j.schedule.Next(time.Now())
+		if !nextTime.IsZero() {
+			duration := time.Until(nextTime)
+			// Ensure minimum duration to prevent immediate re-execution
+			if duration < time.Second {
+				// If next time is too soon, calculate the one after that
+				nextTime = j.schedule.Next(nextTime.Add(time.Second))
+				duration = time.Until(nextTime)
+			}
+			j.ticker = time.NewTicker(duration)
+		} else {
+			// Fallback to original behavior if Next() returns zero time
+			j.ticker = time.NewTicker(j.schedule.NextInterval(time.Now()))
+		}
 		c.workers[j.WorkerIndex].Chan = reflect.ValueOf(j.ticker.C)
 
 	} else if j.nextDuration != nil {
@@ -258,7 +272,19 @@ func (c *cronWorker) addJob(job *Job) (err error) {
 		if err != nil {
 			return err
 		}
-		duration = job.schedule.NextInterval(time.Now())
+		// Calculate the next execution time for cron expressions
+		nextTime := job.schedule.Next(time.Now())
+		if !nextTime.IsZero() {
+			duration = time.Until(nextTime)
+			// Ensure minimum duration to prevent immediate execution
+			if duration < time.Second {
+				nextTime = job.schedule.Next(nextTime.Add(time.Second))
+				duration = time.Until(nextTime)
+			}
+		} else {
+			// Fallback to original behavior
+			duration = job.schedule.NextInterval(time.Now())
+		}
 	}
 
 	if nextDuration > 0 {
