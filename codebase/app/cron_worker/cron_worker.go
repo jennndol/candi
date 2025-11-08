@@ -230,7 +230,9 @@ func (c *cronWorker) stopAllJob() {
 func (c *cronWorker) registerNextInterval(j *Job) {
 	if j.schedule != nil {
 		j.ticker.Stop()
-		j.ticker = time.NewTicker(j.schedule.NextInterval(time.Now()))
+		// For cron expressions, calculate the exact next execution time dynamically
+		duration := j.calculateNextTime()
+		j.ticker = time.NewTicker(duration)
 		c.workers[j.WorkerIndex].Chan = reflect.ValueOf(j.ticker.C)
 
 	} else if j.nextDuration != nil {
@@ -244,7 +246,7 @@ func (c *cronWorker) registerNextInterval(j *Job) {
 }
 
 // addJob to cron worker
-func (c *cronWorker) addJob(job *Job) (err error) {
+func (c *cronWorker) addJob(job *Job) error {
 	if len(job.Handler.HandlerFuncs) == 0 {
 		return errors.New("handler func cannot empty")
 	}
@@ -258,7 +260,8 @@ func (c *cronWorker) addJob(job *Job) (err error) {
 		if err != nil {
 			return err
 		}
-		duration = job.schedule.NextInterval(time.Now())
+		// For cron expressions, use the new calculateNextTime method
+		duration = job.calculateNextTime()
 	}
 
 	if nextDuration > 0 {
