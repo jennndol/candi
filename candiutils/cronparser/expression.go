@@ -142,6 +142,9 @@ func (expr *expression) Next(fromTime time.Time) time.Time {
 		return fromTime
 	}
 
+	// Always advance at least one second to ensure strictly future time
+	fromTime = fromTime.Add(time.Second)
+
 	// Since expr.nextSecond()-expr.nextMonth() expects that the
 	// supplied time stamp is a perfect match to the underlying cron
 	// expression, and since this function is an entry point where `fromTime`
