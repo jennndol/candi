@@ -111,7 +111,6 @@ func (c *cronWorker) Serve() {
 
 		chosen = chosen - 2
 		job := c.activeJobs[chosen]
-		c.registerNextInterval(job)
 
 		if len(c.semaphore[job.WorkerIndex-2]) >= c.opt.maxGoroutines {
 			continue
@@ -123,6 +122,8 @@ func (c *cronWorker) Serve() {
 			defer func() {
 				c.wg.Done()
 				<-c.semaphore[j.WorkerIndex-2]
+				// Register next interval after job completes to ensure accurate timing
+				c.registerNextInterval(j)
 			}()
 			if c.ctx.Err() != nil {
 				logger.LogRed("cron_scheduler > ctx root err: " + c.ctx.Err().Error())
