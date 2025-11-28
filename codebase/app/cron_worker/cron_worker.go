@@ -231,12 +231,22 @@ func (c *cronWorker) stopAllJob() {
 func (c *cronWorker) registerNextInterval(j *Job) {
 	if j.schedule != nil {
 		j.ticker.Stop()
-		j.ticker = time.NewTicker(j.schedule.NextInterval(time.Now()))
+		nextDur := j.schedule.NextInterval(time.Now())
+		// Ensure minimum interval of 1 second to prevent ticker errors
+		if nextDur <= 0 {
+			nextDur = time.Second
+		}
+		j.ticker = time.NewTicker(nextDur)
 		c.workers[j.WorkerIndex].Chan = reflect.ValueOf(j.ticker.C)
 
 	} else if j.nextDuration != nil {
 		j.ticker.Stop()
-		j.ticker = time.NewTicker(*j.nextDuration)
+		dur := *j.nextDuration
+		// Ensure minimum interval of 1 second to prevent ticker errors
+		if dur <= 0 {
+			dur = time.Second
+		}
+		j.ticker = time.NewTicker(dur)
 		c.workers[j.WorkerIndex].Chan = reflect.ValueOf(j.ticker.C)
 		j.nextDuration = nil
 	}
@@ -260,6 +270,11 @@ func (c *cronWorker) addJob(job *Job) (err error) {
 			return err
 		}
 		duration = job.schedule.NextInterval(time.Now())
+	}
+
+	// Ensure duration is at least 1 millisecond to prevent ticker errors
+	if duration <= 0 {
+		duration = time.Millisecond
 	}
 
 	if nextDuration > 0 {

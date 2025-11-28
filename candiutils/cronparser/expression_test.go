@@ -39,11 +39,11 @@ func TestHourlyAtMinuteZero(t *testing.T) {
 	}
 
 	// Test from one second before the hour
-	// After adding 1 second, we're at 11:00:00 which matches the cron,
-	// so Next should return the following occurrence at 12:00:00
+	// After adding 1 second, we're at 11:00:00 which matches the cron (minute 0),
+	// so Next should return that matching time
 	start = time.Date(2025, 11, 27, 10, 59, 59, 0, time.UTC)
 	next = sched.Next(start)
-	expected = time.Date(2025, 11, 27, 12, 0, 0, 0, time.UTC)
+	expected = time.Date(2025, 11, 27, 11, 0, 0, 0, time.UTC)
 	if !next.Equal(expected) {
 		t.Errorf("Next for '0 * * * *' from %v: got %v, want %v", start, next, expected)
 	}
