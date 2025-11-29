@@ -83,7 +83,7 @@ func AddJob(ctx context.Context, req *AddJobRequest) (jobID string, err error) {
 	if engine == nil {
 		return jobID, errWorkerInactive
 	}
-	workerIndex, ok := engine.registeredTaskWorkerIndex[req.TaskName]
+	_, ok := engine.registeredTaskWorkerIndex[req.TaskName]
 	if !ok {
 		return jobID, fmt.Errorf("task '%s' unregistered, task must one of [%s]",
 			req.TaskName, strings.Join(engine.tasks, ", "))
@@ -142,12 +142,13 @@ func AddJob(ctx context.Context, req *AddJobRequest) (jobID string, err error) {
 	if summary.IsHold || summary.IsLoading {
 		return newJob.ID, nil
 	}
-	if n := engine.opt.queue.PushJob(ctx, &newJob); n <= 1 && len(engine.semaphore[workerIndex-1]) == 0 {
-		engine.registerJobToWorker(&newJob)
-	}
+	engine.opt.queue.PushJob(ctx, &newJob)
 	if engine.opt.locker.HasBeenLocked(engine.getLockKey(newJob.TaskName)) {
 		engine.unlockTask(newJob.TaskName)
 	}
+	// Always call registerNextJob to ensure proper job registration and execution
+	logger.LogI(fmt.Sprintf("[jennndol] AddJob: registering next job for task=%s, jobID=%s", newJob.TaskName, newJob.ID))
+	engine.registerNextJob(true, newJob.TaskName)
 
 	return newJob.ID, nil
 }
@@ -272,7 +273,9 @@ func RetryJob(ctx context.Context, jobID string) error {
 	}
 	engine.opt.queue.PushJob(ctx, &job)
 	engine.subscriber.broadcastAllToSubscribers(ctx)
-	engine.registerJobToWorker(&job)
+	// Use registerNextJob to ensure cron is re-registered even if still in queueing mode
+	logger.LogI(fmt.Sprintf("[jennndol] RetryJob: registering next job for task=%s, jobID=%s", job.TaskName, job.ID))
+	engine.registerNextJob(true, job.TaskName)
 
 	return nil
 }

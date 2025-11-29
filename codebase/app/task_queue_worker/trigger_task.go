@@ -40,6 +40,10 @@ func (t *taskQueueWorker) triggerTask(workerIndex int) {
 		return
 	}
 
+	// Register next job BEFORE execution to ensure immediate scheduling
+	logger.LogI(fmt.Sprintf("[jennndol] triggerTask: registering next job for task=%s before execution", runningTask.taskName))
+	t.registerNextJob(true, runningTask.taskName)
+
 	t.wg.Add(1)
 	go func(workerIndex int, task *Task) {
 		var ctx context.Context
@@ -52,8 +56,6 @@ func (t *taskQueueWorker) triggerTask(workerIndex int) {
 			t.wg.Done()
 			<-t.semaphore[workerIndex-1]
 			task.cancel()
-
-			t.registerNextJob(true, task.taskName)
 		}()
 
 		if t.ctx.Err() != nil {
@@ -302,22 +304,29 @@ func (t *taskQueueWorker) unlockTask(taskName string) {
 
 func (t *taskQueueWorker) registerNextJob(withStream bool, taskName string) {
 	nextJobID := t.opt.queue.NextJob(t.ctx, taskName)
+	logger.LogI(fmt.Sprintf("[jennndol] registerNextJob: task=%s, withStream=%v, nextJobID=%s", taskName, withStream, nextJobID))
 	if nextJobID != "" {
 		nextJob, _ := t.opt.persistent.FindJobByID(t.ctx, nextJobID, nil)
 		if nextJob.Status != string(StatusQueueing) {
+			logger.LogI(fmt.Sprintf("[jennndol] registerNextJob: removing invalid job, jobID=%s, status=%s", nextJobID, nextJob.Status))
 			t.opt.queue.PopJob(t.ctx, taskName) // remove unused job (job not found maybe if not save job after success)
 			t.registerNextJob(false, taskName)
+			return
 		}
 		t.registerJobToWorker(&nextJob)
 
 	} else if withStream {
-		StreamAllJob(t.ctx, &Filter{
+		logger.LogI(fmt.Sprintf("[jennndol] registerNextJob: queue empty, streaming jobs from DB for task=%s", taskName))
+		count := StreamAllJob(t.ctx, &Filter{
 			TaskName: taskName,
 			Sort:     "created_at",
 			Status:   candihelper.WrapPtr(string(StatusQueueing)),
 		}, func(_, _ int, job *Job) {
 			t.opt.queue.PushJob(t.ctx, job)
 		})
+		logger.LogI(fmt.Sprintf("[jennndol] registerNextJob: streamed %d jobs for task=%s", count, taskName))
 		t.registerNextJob(false, taskName)
+	} else {
+		logger.LogI(fmt.Sprintf("[jennndol] registerNextJob: no jobs found for task=%s", taskName))
 	}
 }

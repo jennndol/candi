@@ -238,6 +238,7 @@ func (t *taskQueueWorker) Name() string {
 
 func (t *taskQueueWorker) registerJobToWorker(job *Job) {
 	if job.Status != string(StatusQueueing) {
+		logger.LogI(fmt.Sprintf("[jennndol] registerJobToWorker: skip, job status=%s (not queueing), jobID=%s", job.Status, job.ID))
 		return
 	}
 
@@ -252,6 +253,7 @@ func (t *taskQueueWorker) registerJobToWorker(job *Job) {
 
 	workerIndex := t.registeredTaskWorkerIndex[job.TaskName]
 	taskIndex := t.runningWorkerIndexTask[workerIndex]
+	logger.LogI(fmt.Sprintf("[jennndol] registerJobToWorker: task=%s, jobID=%s, interval=%v, workerIndex=%d", job.TaskName, job.ID, interval, workerIndex))
 	taskIndex.activeInterval = time.NewTicker(interval)
 	t.workerChannels[workerIndex].Chan = reflect.ValueOf(taskIndex.activeInterval.C)
 	t.doRefreshWorker()
